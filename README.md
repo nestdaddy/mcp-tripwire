@@ -1,5 +1,7 @@
 # mcp-tripwire
 
+[![CI](https://github.com/nestdaddy/mcp-tripwire/actions/workflows/ci.yml/badge.svg)](https://github.com/nestdaddy/mcp-tripwire/actions/workflows/ci.yml) [![PyPI](https://img.shields.io/pypi/v/mcp-tripwire)](https://pypi.org/project/mcp-tripwire/) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 **Know when an MCP server silently changes the tools your AI agent trusts.**
 
 Your agent reads every MCP tool description as instructions. A remote MCP server can change those descriptions at any time, after you approved it, and your agent follows the new text on its next call. This is how *tool poisoning* and *rug pull* attacks work, and most MCP clients never tell you it happened.

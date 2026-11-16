@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp-tripwire"
-version = "0.1.0"
+version = "0.2.0"
 description = "Know when an MCP server silently changes the tools your AI agent trusts. Pin tool descriptions, detect drift in CI, and scan for prompt-injection patterns."
 readme = "README.md"
 license = "MIT"

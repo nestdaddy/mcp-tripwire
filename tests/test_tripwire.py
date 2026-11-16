@@ -253,3 +253,39 @@ def test_cli_scan_exit_codes(monkeypatch, capsys):
     assert "HIGH" in capsys.readouterr().out
     monkeypatch.setattr(cli, "_servers", lambda args: ([mem(honest_server(), "good")], []))
     assert cli.main(["scan"]) == 0
+
+
+# ----------------------------------------------------------------------------------------------- history
+def test_history_sends_only_scheme_host_and_path():
+    from mcp_tripwire.history import bare_url
+
+    assert bare_url("https://user:pw@mcp.example.com:8443/mcp?api_key=SECRET#x") == "https://mcp.example.com:8443/mcp"
+
+
+def test_cli_history_prints_changes(monkeypatch, capsys):
+    from mcp_tripwire import cli as cli_mod
+
+    spec = ServerSpec(name="acme", transport="http", source="t", url="https://acme.example/mcp")
+    monkeypatch.setattr(cli_mod, "_servers", lambda args: ([spec], []))
+    fake = {
+        "tools": 3,
+        "checked_since": "2026-11-13",
+        "page": "https://nestdaddy.com/mcp/servers/acme",
+        "tool_changes": [
+            {
+                "date": "2026-11-15",
+                "changed": ["search"],
+                "added": ["send_report"],
+                "removed": [],
+                "renamed": [],
+                "schema_changed": [],
+            }
+        ],
+    }
+    monkeypatch.setattr(cli_mod, "lookup", lambda url, timeout=15: fake)
+    assert cli_mod.main(["history"]) == 0
+    out = capsys.readouterr().out
+    assert "2026-11-15" in out and "description rewritten: search" in out and "added: send_report" in out
+    monkeypatch.setattr(cli_mod, "lookup", lambda url, timeout=15: None)
+    assert cli_mod.main(["history"]) == 0
+    assert "[UNLISTED] acme" in capsys.readouterr().out

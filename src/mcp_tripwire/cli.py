@@ -4,6 +4,7 @@
   mcp-tripwire pin                  record what every server's tools say today
   mcp-tripwire check                compare with the pinned version (exit 1 on any change)
   mcp-tripwire scan                 look for prompt-injection patterns in tool descriptions
+  mcp-tripwire history              public change history of your remote servers (NestDaddy directory)
 
 Exit codes: 0 = clean, 1 = changes or high-severity findings, 2 = nothing could be checked (errors only).
 """
@@ -21,6 +22,7 @@ from urllib.parse import urlsplit
 from . import __version__
 from .configs import ServerSpec, discover
 from .fetch import FetchError, fetch_many
+from .history import HistoryError, lookup
 from .lock import DEFAULT_LOCK, compare, load, pin_entry, save
 from .scan import HIGH, MEDIUM, scan_tools
 
@@ -230,6 +232,59 @@ def cmd_scan(args) -> int:
     return 2 if specs and errors == len(specs) else 0
 
 
+def cmd_history(args) -> int:
+    """Public tool-change history of your remote servers, from the NestDaddy MCP directory (daily checks)."""
+    specs, _ = _servers(args)
+    remote = [s for s in specs if s.transport == "http" and s.url]
+    report, errors = [], 0
+    if not remote and not args.json:
+        print("No remote (HTTP) MCP servers found. History covers public remote servers only.")
+    for s in remote:
+        try:
+            h = lookup(s.url, timeout=args.timeout)
+        except HistoryError as exc:
+            errors += 1
+            report.append({"server": s.name, "error": str(exc)})
+            if not args.json:
+                print(f"{red('[ERROR]')} {s.name}: {exc}")
+            continue
+        report.append({"server": s.name, "history": h})
+        if args.json:
+            continue
+        if not h:
+            print(f"{dim('[UNLISTED]')} {s.name}: not in the public directory (private or unknown server)")
+            continue
+        changes = h.get("tool_changes") or []
+        n_tools = h.get("tools") or 0
+        tools_txt = f"{n_tools} tools" if n_tools else "tools not visible without a key"
+        print(f"{bold(s.name)}  {tools_txt}, checked daily since {h.get('checked_since') or '?'}")
+        if not changes:
+            print(f"  {green('no tool changes recorded')}")
+        for ch in changes[: args.limit]:
+            parts = []
+            for key, label in (
+                ("changed", "description rewritten"),
+                ("added", "added"),
+                ("removed", "removed"),
+                ("schema_changed", "arguments changed"),
+                ("renamed", "renamed"),
+            ):
+                items = ch.get(key) or []
+                if items:
+                    names = ", ".join(
+                        str(i) if not isinstance(i, list) else " -> ".join(map(str, i)) for i in items[:5]
+                    )
+                    more = f" +{len(items) - 5}" if len(items) > 5 else ""
+                    parts.append(f"{label}: {names}{more}")
+            print(f"  {ch.get('date', '?')}  " + "; ".join(parts))
+        if len(changes) > args.limit:
+            print(dim(f"  ... {len(changes) - args.limit} older change(s)"))
+        print(dim(f"  {h.get('page')}"))
+    if args.json:
+        print(json.dumps({"servers": report}, indent=2))
+    return 2 if remote and errors == len(remote) else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="mcp-tripwire",
@@ -244,6 +299,7 @@ def build_parser() -> argparse.ArgumentParser:
         ("pin", cmd_pin, "record the current tool descriptions"),
         ("check", cmd_check, "compare live tools with the pinned ones"),
         ("scan", cmd_scan, "look for prompt-injection patterns"),
+        ("history", cmd_history, "public tool-change history of your remote servers (NestDaddy directory)"),
     ):
         sp = sub.add_parser(name, help=help_)
         sp.set_defaults(func=fn)
@@ -259,6 +315,8 @@ def build_parser() -> argparse.ArgumentParser:
         sp.add_argument("--lock", type=Path, default=DEFAULT_LOCK, help=f"lock file (default {DEFAULT_LOCK})")
         sp.add_argument("--timeout", type=float, default=30.0, help="seconds per server (default 30)")
         sp.add_argument("--json", action="store_true", help="machine-readable output")
+        if name == "history":
+            sp.add_argument("--limit", type=int, default=10, help="changes to show per server (default 10)")
         if name == "scan":
             sp.add_argument(
                 "--fail-on",

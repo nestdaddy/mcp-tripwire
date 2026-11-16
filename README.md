@@ -27,6 +27,7 @@ $ mcp-tripwire check
 - **Pins** every tool's description, input/output schema and annotations (SHA-256), in a local lock file.
 - **Checks** for added, removed and rewritten tools, and shows a diff of exactly what the model will now be told.
 - **Scans** descriptions and parameter descriptions for prompt-injection patterns (hidden Unicode, "do not tell the user", reading `~/.ssh`, sending private data to a URL).
+- **Knows the history**: `mcp-tripwire history` shows when each of your remote servers changed its tools in the past, from a public directory that checks every public remote MCP server daily.
 - **CI-friendly**: exit code 1 on any change, `--json` output.
 - **Read-only and private**: it only calls `tools/list`, never a tool. Header values and keys are never written to the lock file or printed.
 
@@ -45,6 +46,7 @@ mcp-tripwire list     # the MCP servers found in your AI clients' configs
 mcp-tripwire pin      # record what every server's tools say today
 mcp-tripwire check    # compare with the pinned version (exit 1 on any change)
 mcp-tripwire scan     # look for prompt-injection patterns
+mcp-tripwire history  # past tool changes of your remote servers (public directory)
 ```
 
 Check one remote server directly:
@@ -57,6 +59,17 @@ mcp-tripwire check --url https://mcp.example.com/mcp --header "Authorization: Be
 Local (stdio) servers are skipped by default, because reading their tools means starting their command. Add `--stdio` to include them.
 
 Options: `--only NAME`, `--config path/to/mcp.json`, `--lock path/to/lock.json` (default `~/.mcp-tripwire/lock.json`, or `$MCP_TRIPWIRE_LOCK`), `--timeout`, `--json`, and for `scan`, `--fail-on high|medium`.
+
+## See a server's history before you trust it
+
+```console
+$ mcp-tripwire history --url https://mcp.nestdaddy.com/mcp
+mcp.nestdaddy.com  9 tools, checked daily since 2026-11-13
+  2026-11-14  description rewritten: country_news, news, news_search; arguments changed: country_news, news, news_search
+  https://nestdaddy.com/mcp/servers/com-nestdaddy-nestdaddy
+```
+
+`history` asks the [NestDaddy MCP directory](https://nestdaddy.com/mcp/servers), which connects to every public remote MCP server in the official MCP Registry once a day and records tool changes. **Privacy:** it sends only the scheme, host and path of each remote server URL (never keys, headers or query strings), and only when you run `history`. All other commands never contact anything but your own MCP servers. Set `MCP_TRIPWIRE_DIRECTORY` to use another directory.
 
 ## Run it in CI
 
